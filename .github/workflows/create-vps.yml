@@ -53,4 +53,5 @@ jobs:
             --assign-public-ip true \
             --boot-volume-size-in-gbs 100 \
             --metadata file://metadata.json \
-          || echo "⚠️ Pas de capacité pour l'instant, réessai dans 5 min..."
+            --debug \
+          || echo "⚠️ Erreur, check le debug ci-dessus"
