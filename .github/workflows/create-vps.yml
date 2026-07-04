@@ -31,17 +31,27 @@ jobs:
           EOF
           chmod 600 ~/.oci/config
 
-      - name: Créer l'instance (avec gestion capacité)
+            - name: Créer l'instance (avec gestion capacité)
         run: |
+          # On crée les fichiers JSON proprement
+          echo '{"ssh_authorized_keys":"${{ secrets.OCI_SSH_PUBLIC_KEY }}"}' > metadata.json
+          echo '{"ocpus":4,"memoryInGBs":24}' > shape.json
+
+          # On vérifie que le JSON est valide (debug utile !)
+          echo "=== Contenu metadata.json ==="
+          cat metadata.json
+          echo "=== Contenu shape.json ==="
+          cat shape.json
+
           oci compute instance launch \
             --availability-domain "${{ secrets.OCI_AVAILABILITY_DOMAIN }}" \
             --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
             --shape "VM.Standard.A1.Flex" \
-            --shape-config '{"ocpus":4,"memoryInGBs":24}' \
+            --shape-config file://shape.json \
             --image-id "${{ secrets.OCI_IMAGE_ID }}" \
             --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
             --assign-public-ip true \
             --boot-volume-size-in-gbs 100 \
-            --metadata '{"ssh_authorized_keys":"${{ secrets.OCI_SSH_PUBLIC_KEY }}"}' \
+            --metadata file://metadata.json \
             --wait-for-state RUNNING \
           || echo "⚠️ Pas de capacité pour l'instant, réessai dans 5 min..."
