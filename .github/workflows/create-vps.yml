@@ -1,0 +1,47 @@
+name: Créer VPS Oracle Cloud
+
+on:
+  workflow_dispatch:              # Bouton de lancement manuel 🖱️
+  schedule:
+    - cron: '*/5 * * * *'         # Réessaie toutes les 5 min ⏰
+
+jobs:
+  create-instance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Installer OCI CLI
+        run: |
+          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh -o install.sh
+          chmod +x install.sh
+          ./install.sh --accept-all-defaults
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Configurer OCI
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_CLI_KEY_CONTENT }}" > ~/.oci/key.pem
+          chmod 600 ~/.oci/key.pem
+          cat > ~/.oci/config <<EOF
+          [DEFAULT]
+          user=${{ secrets.OCI_CLI_USER }}
+          tenancy=${{ secrets.OCI_CLI_TENANCY }}
+          fingerprint=${{ secrets.OCI_CLI_FINGERPRINT }}
+          region=${{ secrets.OCI_CLI_REGION }}
+          key_file=~/.oci/key.pem
+          EOF
+          chmod 600 ~/.oci/config
+
+      - name: Créer l'instance (avec gestion capacité)
+        run: |
+          oci compute instance launch \
+            --availability-domain "${{ secrets.OCI_AVAILABILITY_DOMAIN }}" \
+            --compartment-id "${{ secrets.OCI_CLI_TENANCY }}" \
+            --shape "VM.Standard.A1.Flex" \
+            --shape-config '{"ocpus":4,"memoryInGBs":24}' \
+            --image-id "${{ secrets.OCI_IMAGE_ID }}" \
+            --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
+            --assign-public-ip true \
+            --boot-volume-size-in-gbs 100 \
+            --metadata '{"ssh_authorized_keys":"${{ secrets.OCI_SSH_PUBLIC_KEY }}"}' \
+            --wait-for-state RUNNING \
+          || echo "⚠️ Pas de capacité pour l'instant, réessai dans 5 min..."
