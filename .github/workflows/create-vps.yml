@@ -35,9 +35,9 @@ jobs:
         run: |
           # On crée les fichiers JSON proprement
           echo '{"ssh_authorized_keys":"${{ secrets.OCI_SSH_PUBLIC_KEY }}"}' > metadata.json
-          echo '{"ocpus":4,"memoryInGBs":24}' > shape.json
+          echo '{"ocpus":4,"memoryInGBs":64}' > shape.json
 
-          # On vérifie que le JSON est valide (debug utile !)
+          # On vérifie que le JSON est valide
           echo "=== Contenu metadata.json ==="
           cat metadata.json
           echo "=== Contenu shape.json ==="
@@ -53,5 +53,4 @@ jobs:
             --assign-public-ip true \
             --boot-volume-size-in-gbs 100 \
             --metadata file://metadata.json \
-            --wait-for-state RUNNING \
           || echo "⚠️ Pas de capacité pour l'instant, réessai dans 5 min..."
