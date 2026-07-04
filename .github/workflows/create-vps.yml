@@ -33,8 +33,15 @@ jobs:
 
       - name: Créer l'instance (avec gestion capacité)
         run: |
+          # On nettoie les variables (remove trailing newlines)
+          AD=$(echo -n "${{ secrets.OCI_AVAILABILITY_DOMAIN }}" | tr -d '\n' | tr -d ' ')
+          COMP=$(echo -n "${{ secrets.OCI_COMPARTMENT_OCID }}" | tr -d '\n' | tr -d ' ')
+          IMG=$(echo -n "${{ secrets.OCI_IMAGE_ID }}" | tr -d '\n' | tr -d ' ')
+          SUBNET=$(echo -n "${{ secrets.OCI_SUBNET_ID }}" | tr -d '\n' | tr -d ' ')
+          SSH=$(echo -n "${{ secrets.OCI_SSH_PUBLIC_KEY }}" | tr -d '\n')
+
           # On crée les fichiers JSON proprement
-          echo '{"ssh_authorized_keys":"${{ secrets.OCI_SSH_PUBLIC_KEY }}"}' > metadata.json
+          echo "{\"ssh_authorized_keys\":\"${SSH}\"}" > metadata.json
           echo '{"ocpus":4,"memoryInGBs":64}' > shape.json
 
           # On vérifie que le JSON est valide
@@ -42,16 +49,17 @@ jobs:
           cat metadata.json
           echo "=== Contenu shape.json ==="
           cat shape.json
+          echo "=== Availability Domain ==="
+          echo "$AD"
 
           oci compute instance launch \
-            --availability-domain "${{ secrets.OCI_AVAILABILITY_DOMAIN }}" \
-            --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
+            --availability-domain "$AD" \
+            --compartment-id "$COMP" \
             --shape "VM.Standard.A1.Flex" \
             --shape-config file://shape.json \
-            --image-id "${{ secrets.OCI_IMAGE_ID }}" \
-            --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
+            --image-id "$IMG" \
+            --subnet-id "$SUBNET" \
             --assign-public-ip true \
             --boot-volume-size-in-gbs 100 \
             --metadata file://metadata.json \
-            --debug \
-          || echo "⚠️ Erreur, check le debug ci-dessus"
+          || echo "⚠️ Erreur lors de la création"
