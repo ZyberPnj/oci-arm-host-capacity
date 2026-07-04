@@ -31,7 +31,7 @@ jobs:
           EOF
           chmod 600 ~/.oci/config
 
-            - name: Créer l'instance (avec gestion capacité)
+      - name: Créer l'instance (avec gestion capacité)
         run: |
           # On crée les fichiers JSON proprement
           echo '{"ssh_authorized_keys":"${{ secrets.OCI_SSH_PUBLIC_KEY }}"}' > metadata.json
