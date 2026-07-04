@@ -21,6 +21,10 @@ jobs:
           mkdir -p ~/.oci
           echo "${{ secrets.OCI_PRIVATE_KEY_FILENAME }}" > ~/.oci/key.pem
           chmod 600 ~/.oci/key.pem
+          
+          # ✅ AJOUT D'UNE LIGNE VIDE À LA FIN
+          echo "" >> ~/.oci/key.pem
+          
           cat > ~/.oci/config <<EOF
           [DEFAULT]
           user=${{ secrets.OCI_USER_ID }}
@@ -32,6 +36,8 @@ jobs:
           chmod 600 ~/.oci/config
 
       - name: Créer l'instance (avec gestion capacité)
+        env:
+          SUPPRESS_LABEL_WARNING: "True"
         run: |
           # On nettoie les variables (remove trailing newlines)
           AD=$(echo -n "${{ secrets.OCI_AVAILABILITY_DOMAIN }}" | tr -d '\n' | tr -d ' ')
@@ -61,5 +67,4 @@ jobs:
             --subnet-id "$SUBNET" \
             --assign-public-ip true \
             --boot-volume-size-in-gbs 100 \
-            --metadata file://metadata.json \
-          || echo "⚠️ Erreur lors de la création"
+            --metadata file://metadata.json
