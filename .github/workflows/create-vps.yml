@@ -1,9 +1,9 @@
 name: Créer VPS Oracle Cloud
 
 on:
-  workflow_dispatch:              # Bouton de lancement manuel 🖱️
+  workflow_dispatch:
   schedule:
-    - cron: '*/5 * * * *'         # Réessaie toutes les 5 min ⏰
+    - cron: '*/5 * * * *'
 
 jobs:
   create-instance:
@@ -19,14 +19,14 @@ jobs:
       - name: Configurer OCI
         run: |
           mkdir -p ~/.oci
-          echo "${{ secrets.OCI_CLI_KEY_CONTENT }}" > ~/.oci/key.pem
+          echo "${{ secrets.OCI_PRIVATE_KEY_FILENAME }}" > ~/.oci/key.pem
           chmod 600 ~/.oci/key.pem
           cat > ~/.oci/config <<EOF
           [DEFAULT]
-          user=${{ secrets.OCI_CLI_USER }}
-          tenancy=${{ secrets.OCI_CLI_TENANCY }}
-          fingerprint=${{ secrets.OCI_CLI_FINGERPRINT }}
-          region=${{ secrets.OCI_CLI_REGION }}
+          user=${{ secrets.OCI_USER_ID }}
+          tenancy=${{ secrets.OCI_TENANCY_ID }}
+          fingerprint=${{ secrets.OCI_KEY_FINGERPRINT }}
+          region=${{ secrets.OCI_REGION }}
           key_file=~/.oci/key.pem
           EOF
           chmod 600 ~/.oci/config
@@ -35,7 +35,7 @@ jobs:
         run: |
           oci compute instance launch \
             --availability-domain "${{ secrets.OCI_AVAILABILITY_DOMAIN }}" \
-            --compartment-id "${{ secrets.OCI_CLI_TENANCY }}" \
+            --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
             --shape "VM.Standard.A1.Flex" \
             --shape-config '{"ocpus":4,"memoryInGBs":24}' \
             --image-id "${{ secrets.OCI_IMAGE_ID }}" \
