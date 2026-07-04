@@ -1,5 +1,4 @@
 name: Créer VPS Oracle Cloud
-
 on:
   workflow_dispatch:
   schedule:
@@ -20,11 +19,9 @@ jobs:
         run: |
           mkdir -p ~/.oci
           echo "${{ secrets.OCI_PRIVATE_KEY_FILENAME }}" > ~/.oci/key.pem
-          chmod 600 ~/.oci/key.pem
-          
-          # ✅ AJOUT D'UNE LIGNE VIDE À LA FIN
           echo "" >> ~/.oci/key.pem
-          
+          chmod 600 ~/.oci/key.pem
+
           cat > ~/.oci/config <<EOF
           [DEFAULT]
           user=${{ secrets.OCI_USER_ID }}
@@ -35,36 +32,88 @@ jobs:
           EOF
           chmod 600 ~/.oci/config
 
-      - name: Créer l'instance (avec gestion capacité)
+      - name: Vérifier si une instance existe déjà
+        id: check_instance
+        run: |
+          COMP=$(echo -n "${{ secrets.OCI_COMPARTMENT_OCID }}" | tr -d '\n' | tr -d ' ')
+
+          EXISTING=$(oci compute instance list \
+            --compartment-id "$COMP" \
+            --lifecycle-state RUNNING \
+            --query "data[?shape=='VM.Standard.A1.Flex'].id" \
+            --raw-output 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING" ] && [ "$EXISTING" != "[]" ]; then
+            echo "Une instance A1.Flex existe déjà, on arrête ici."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Aucune instance A1.Flex existante, on continue."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Créer l'instance (avec gestion capacité multi-AD)
+        if: steps.check_instance.outputs.skip == 'false'
         env:
           SUPPRESS_LABEL_WARNING: "True"
         run: |
-          # On nettoie les variables (remove trailing newlines)
-          AD=$(echo -n "${{ secrets.OCI_AVAILABILITY_DOMAIN }}" | tr -d '\n' | tr -d ' ')
           COMP=$(echo -n "${{ secrets.OCI_COMPARTMENT_OCID }}" | tr -d '\n' | tr -d ' ')
           IMG=$(echo -n "${{ secrets.OCI_IMAGE_ID }}" | tr -d '\n' | tr -d ' ')
           SUBNET=$(echo -n "${{ secrets.OCI_SUBNET_ID }}" | tr -d '\n' | tr -d ' ')
           SSH=$(echo -n "${{ secrets.OCI_SSH_PUBLIC_KEY }}" | tr -d '\n')
 
-          # On crée les fichiers JSON proprement
           echo "{\"ssh_authorized_keys\":\"${SSH}\"}" > metadata.json
           echo '{"ocpus":4,"memoryInGBs":64}' > shape.json
 
-          # On vérifie que le JSON est valide
           echo "=== Contenu metadata.json ==="
           cat metadata.json
           echo "=== Contenu shape.json ==="
           cat shape.json
-          echo "=== Availability Domain ==="
-          echo "$AD"
 
-          oci compute instance launch \
-            --availability-domain "$AD" \
+          echo "=== Récupération des Availability Domains ==="
+          ADS=$(oci iam availability-domain list \
             --compartment-id "$COMP" \
-            --shape "VM.Standard.A1.Flex" \
-            --shape-config file://shape.json \
-            --image-id "$IMG" \
-            --subnet-id "$SUBNET" \
-            --assign-public-ip true \
-            --boot-volume-size-in-gbs 100 \
-            --metadata file://metadata.json
+            --query "data[].name" \
+            --raw-output | tr -d '[]"' | tr ',' '\n')
+
+          echo "AD trouvés :"
+          echo "$ADS"
+
+          SUCCESS=false
+
+          for AD in $ADS; do
+            AD_CLEAN=$(echo -n "$AD" | tr -d ' ')
+            echo "=== Tentative sur AD: $AD_CLEAN ==="
+
+            set +e
+            OUTPUT=$(oci compute instance launch \
+              --availability-domain "$AD_CLEAN" \
+              --compartment-id "$COMP" \
+              --shape "VM.Standard.A1.Flex" \
+              --shape-config file://shape.json \
+              --image-id "$IMG" \
+              --subnet-id "$SUBNET" \
+              --assign-public-ip true \
+              --boot-volume-size-in-gbs 100 \
+              --metadata file://metadata.json 2>&1)
+            EXIT_CODE=$?
+            set -e
+
+            echo "$OUTPUT"
+
+            if [ $EXIT_CODE -eq 0 ]; then
+              echo "✅ Instance créée avec succès sur $AD_CLEAN !"
+              SUCCESS=true
+              break
+            elif echo "$OUTPUT" | grep -q "Out of host capacity"; then
+              echo "⚠️ Pas de capacité sur $AD_CLEAN, on essaie l'AD suivant..."
+              continue
+            else
+              echo "❌ Erreur différente de 'Out of host capacity', arrêt."
+              exit 1
+            fi
+          done
+
+          if [ "$SUCCESS" = false ]; then
+            echo "Aucune capacité disponible sur aucun AD pour ce run. On réessaiera au prochain cron."
+            exit 0
+          fi
