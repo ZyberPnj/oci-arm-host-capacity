@@ -62,7 +62,7 @@ jobs:
           SSH=$(echo -n "${{ secrets.OCI_SSH_PUBLIC_KEY }}" | tr -d '\n')
 
           echo "{\"ssh_authorized_keys\":\"${SSH}\"}" > metadata.json
-          echo '{"ocpus":4,"memoryInGBs":64}' > shape.json
+          echo '{"ocpus":4,"memoryInGBs":24}' > shape.json
 
           echo "=== Contenu metadata.json ==="
           cat metadata.json
